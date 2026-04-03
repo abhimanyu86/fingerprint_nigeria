@@ -13,8 +13,11 @@ struct LivenessResult {
 
 class LivenessDetector {
 public:
-    // image can be BGR or grayscale
-    static LivenessResult detect(const cv::Mat& image);
+    // image can be BGR or grayscale.
+    // handConfidence: MediaPipe hand detection score (0.0-1.0); used as the
+    // starting confidence before texture/skin penalties are applied.
+    // When called without a MediaPipe score (e.g. from fp_test), pass 0.88.
+    static LivenessResult detect(const cv::Mat& image, float handConfidence = 0.88f);
 
 private:
     // Returns normalised score: 1.0 = no glare, <=0 = fail

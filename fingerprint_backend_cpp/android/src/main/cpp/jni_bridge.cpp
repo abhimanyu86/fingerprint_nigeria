@@ -8,7 +8,7 @@
 #define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__)
 
 // ---------------------------------------------------------------------------
-// Helper: put a Float into a Java HashMap
+// Helpers: write typed values into a Java HashMap
 // ---------------------------------------------------------------------------
 static void putFloat(JNIEnv* env, jobject map,
                      jmethodID mapPut,
@@ -37,30 +37,9 @@ static void putStr(JNIEnv* env, jobject map,
 }
 
 // ---------------------------------------------------------------------------
-// JNI exports
+// Shared result-map builder — keeps both JNI exports DRY
 // ---------------------------------------------------------------------------
-extern "C" {
-
-/**
- * Runs the full fingerprint pipeline on a JPEG byte array.
- * Returns a HashMap<String,Object> with keys:
- *   qualityScore, blurScore, contrastScore, ridgeClarityScore,
- *   coverageScore, orientationScore, guidance,
- *   livenessScore, isLive, accepted, template, templateSuccess
- */
-JNIEXPORT jobject JNICALL
-Java_com_yellowsense_fingerprintsdk_FingerprintSDK_processImage(
-        JNIEnv* env, jclass /*cls*/, jbyteArray imageBytes) {
-
-    jsize  len   = env->GetArrayLength(imageBytes);
-    jbyte* bytes = env->GetByteArrayElements(imageBytes, nullptr);
-    std::vector<uint8_t> jpeg(reinterpret_cast<uint8_t*>(bytes),
-                              reinterpret_cast<uint8_t*>(bytes) + len);
-    env->ReleaseByteArrayElements(imageBytes, bytes, JNI_ABORT);
-
-    fingerprint::CaptureResult r = fingerprint::processFingerImage(jpeg);
-
-    // Build result HashMap
+static jobject buildResultMap(JNIEnv* env, const fingerprint::CaptureResult& r) {
     jclass    mapClass = env->FindClass("java/util/HashMap");
     jmethodID mapInit  = env->GetMethodID(mapClass, "<init>", "()V");
     jmethodID mapPut   = env->GetMethodID(mapClass, "put",
@@ -72,26 +51,71 @@ Java_com_yellowsense_fingerprintsdk_FingerprintSDK_processImage(
     jclass    bClass = env->FindClass("java/lang/Boolean");
     jmethodID bInit  = env->GetMethodID(bClass, "<init>", "(Z)V");
 
-    putFloat(env, map, mapPut, fClass, fInit, "qualityScore",      r.quality.compositeScore);
-    putFloat(env, map, mapPut, fClass, fInit, "blurScore",         r.quality.blurScore);
-    putFloat(env, map, mapPut, fClass, fInit, "contrastScore",     r.quality.contrastScore);
-    putFloat(env, map, mapPut, fClass, fInit, "ridgeClarityScore", r.quality.ridgeClarityScore);
-    putFloat(env, map, mapPut, fClass, fInit, "coverageScore",     r.quality.coverageScore);
-    putFloat(env, map, mapPut, fClass, fInit, "orientationScore",  r.quality.orientationScore);
-    putStr  (env, map, mapPut,               "guidance",           r.quality.guidance);
+    // Quality
+    putFloat(env, map, mapPut, fClass, fInit, "qualityScore",       r.quality.compositeScore);
+    putFloat(env, map, mapPut, fClass, fInit, "blurScore",          r.quality.blurScore);
+    putFloat(env, map, mapPut, fClass, fInit, "contrastScore",      r.quality.contrastScore);
+    putFloat(env, map, mapPut, fClass, fInit, "ridgeClarityScore",  r.quality.ridgeClarityScore);
+    putFloat(env, map, mapPut, fClass, fInit, "coverageScore",      r.quality.coverageScore);
+    putFloat(env, map, mapPut, fClass, fInit, "orientationScore",   r.quality.orientationScore);
+    putFloat(env, map, mapPut, fClass, fInit, "illuminationScore",  r.quality.illuminationScore);
+    putFloat(env, map, mapPut, fClass, fInit, "positionScore",      r.quality.positionScore);
+    putStr  (env, map, mapPut,               "guidance",            r.quality.guidance);
+    // Liveness
     putFloat(env, map, mapPut, fClass, fInit, "livenessScore",     r.liveness.confidence);
     putBool (env, map, mapPut, bClass, bInit, "isLive",            r.liveness.isLive);
+    putBool (env, map, mapPut, bClass, bInit, "glareDetected",     r.liveness.glareDetected);
+    putFloat(env, map, mapPut, fClass, fInit, "textureScore",      r.liveness.textureScore);
+    putFloat(env, map, mapPut, fClass, fInit, "skinScore",         r.liveness.skinScore);
+    // Template + meta
     putBool (env, map, mapPut, bClass, bInit, "accepted",          r.accepted);
     putStr  (env, map, mapPut,               "template",
              r.templ.success ? r.templ.base64Template : "");
     putBool (env, map, mapPut, bClass, bInit, "templateSuccess",   r.templ.success);
+    putStr  (env, map, mapPut,               "errorMessage",       r.errorMessage);
 
     return map;
 }
 
+// ---------------------------------------------------------------------------
+// JNI exports
+// ---------------------------------------------------------------------------
+extern "C" {
+
+/**
+ * Full pipeline with explicit MediaPipe hand confidence.
+ * Called from FingerprintSDK.processImageWithConfidence() when processing
+ * frames via HandDetector so the liveness score starts from the real
+ * MediaPipe detection confidence instead of a hardcoded default.
+ */
+JNIEXPORT jobject JNICALL
+Java_com_yellowsense_fingerprintsdk_FingerprintSDK_processImageWithConfidence(
+        JNIEnv* env, jclass /*cls*/, jbyteArray imageBytes, jfloat handConfidence) {
+
+    jsize  len   = env->GetArrayLength(imageBytes);
+    jbyte* bytes = env->GetByteArrayElements(imageBytes, nullptr);
+    std::vector<uint8_t> jpeg(reinterpret_cast<uint8_t*>(bytes),
+                              reinterpret_cast<uint8_t*>(bytes) + len);
+    env->ReleaseByteArrayElements(imageBytes, bytes, JNI_ABORT);
+
+    fingerprint::CaptureResult r = fingerprint::processFingerImage(jpeg, (float)handConfidence);
+    return buildResultMap(env, r);
+}
+
+/**
+ * Legacy entry point (pre-cropped image, no MediaPipe score available).
+ * Uses default confidence 0.88. Delegates to processImageWithConfidence.
+ */
+JNIEXPORT jobject JNICALL
+Java_com_yellowsense_fingerprintsdk_FingerprintSDK_processImage(
+        JNIEnv* env, jclass cls, jbyteArray imageBytes) {
+    return Java_com_yellowsense_fingerprintsdk_FingerprintSDK_processImageWithConfidence(
+            env, cls, imageBytes, 0.88f);
+}
+
 /**
  * Match two ISO 19794-2 base64 templates.
- * Returns a float score 0.0 – 1.0.
+ * Returns a float score 0.0–1.0.
  */
 JNIEXPORT jfloat JNICALL
 Java_com_yellowsense_fingerprintsdk_FingerprintSDK_matchTemplates(
@@ -111,7 +135,7 @@ Java_com_yellowsense_fingerprintsdk_FingerprintSDK_matchTemplates(
 }
 
 /**
- * Extract quality score only (fast path, no template encoding).
+ * Quick quality score only (skips liveness + template encoding).
  */
 JNIEXPORT jfloat JNICALL
 Java_com_yellowsense_fingerprintsdk_FingerprintSDK_getQualityScore(

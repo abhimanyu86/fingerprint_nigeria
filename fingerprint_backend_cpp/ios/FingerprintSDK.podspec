@@ -37,4 +37,10 @@ Pod::Spec.new do |s|
   # opencv2.framework must be placed alongside the podspec before `pod install`
   s.vendored_frameworks = 'opencv2.framework'
   s.frameworks          = 'Foundation', 'UIKit', 'AVFoundation', 'Accelerate'
+
+  # MediaPipe Hand Landmarker — finger detection from full camera frames
+  # Model file (hand_landmarker.task) must be bundled in the host app.
+  # Download: https://storage.googleapis.com/mediapipe-models/hand_landmarker/
+  #           hand_landmarker/float16/latest/hand_landmarker.task
+  s.dependency 'MediaPipeTasksVision', '~> 0.10.14'
 end

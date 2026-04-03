@@ -14,11 +14,15 @@ struct CaptureResult {
     QualityResult  quality;
     LivenessResult liveness;
     TemplateResult templ;
-    bool           accepted;  // quality ACCEPT + liveness pass + template success
+    bool           accepted;      // quality ACCEPT + liveness pass + template success
+    std::string    errorMessage;  // non-empty when pipeline failed early (e.g. bad JPEG)
 };
 
 // Run full pipeline: decode JPEG → quality → liveness → template
-CaptureResult processFingerImage(const std::vector<uint8_t>& jpegBytes);
+// handConfidence: MediaPipe hand detection score forwarded to liveness detector.
+// Defaults to 0.88 when not available (e.g. CLI test runner).
+CaptureResult processFingerImage(const std::vector<uint8_t>& jpegBytes,
+                                 float handConfidence = 0.88f);
 
 // Helpers
 cv::Mat              decodeImage(const std::vector<uint8_t>& jpegBytes);

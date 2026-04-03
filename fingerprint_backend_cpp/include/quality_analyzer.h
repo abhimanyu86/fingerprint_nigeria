@@ -17,6 +17,9 @@ struct QualityResult {
     float ridgeClarityScore;    // 0-100  weight 25%
     float coverageScore;        // 0-100  weight 15%
     float orientationScore;     // 0-100  weight 20%
+    // Three primary user-facing scores (shown per-finger in the UI)
+    float illuminationScore;    // 0-100  brightness level + uniformity
+    float positionScore;        // 0-100  crop aspect ratio + finger coverage
     QualityDecision decision;
     std::string guidance;       // user-facing message
 };
@@ -31,6 +34,8 @@ private:
     static float computeRidgeClarityScore(const cv::Mat& gray);
     static float computeCoverageScore(const cv::Mat& gray);
     static float computeOrientationScore(const cv::Mat& gray);
+    static float computeIlluminationScore(const cv::Mat& gray);
+    static float computePositionScore(const cv::Mat& gray);
     static std::string generateGuidance(const QualityResult& r);
 };
 

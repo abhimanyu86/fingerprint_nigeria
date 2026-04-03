@@ -33,3 +33,16 @@ install(TARGETS fingerprint_core
     RUNTIME  DESTINATION bin
 )
 install(DIRECTORY include/ DESTINATION include)
+
+# ---------------------------------------------------------------------------
+# Test executable — not built in Android/iOS; local desktop testing only
+# ---------------------------------------------------------------------------
+option(BUILD_TESTS "Build the fp_test CLI test runner" ON)
+if(BUILD_TESTS)
+    add_executable(fp_test tests/fp_test.cpp)
+    target_link_libraries(fp_test PRIVATE fingerprint_core)
+    target_include_directories(fp_test PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+        ${OpenCV_INCLUDE_DIRS}
+    )
+endif()

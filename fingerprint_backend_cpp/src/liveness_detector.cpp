@@ -27,12 +27,13 @@ float LivenessDetector::computeTextureScore(const cv::Mat& gray) {
     cv::Scalar meanVar = cv::mean(variance);
     double localStd = std::sqrt(std::abs(meanVar[0]));
 
-    // Real skin: localStd 20-60 → 1.0
-    // Printed / screen: localStd 3-15 → 0.3
-    if (localStd < 3  || localStd > 80) return 0.3f;
-    if (localStd >= 20 && localStd <= 60) return 1.0f;
-    if (localStd < 20) return (float)(localStd / 20.0);
-    return std::max(0.3f, (float)(1.0 - (localStd - 60.0) / 80.0));
+    // Real skin on phone camera: localStd 15-90 → 1.0
+    // High-res cameras produce sharper images so cap raised to 120
+    // Printed / screen: localStd 3-12 → 0.3
+    if (localStd < 3  || localStd > 120) return 0.3f;
+    if (localStd >= 15 && localStd <= 90) return 1.0f;
+    if (localStd < 15) return (float)(localStd / 15.0);
+    return std::max(0.3f, (float)(1.0 - (localStd - 90.0) / 120.0));
 }
 
 float LivenessDetector::computeSkinScore(const cv::Mat& bgr) {
@@ -40,18 +41,19 @@ float LivenessDetector::computeSkinScore(const cv::Mat& bgr) {
     cv::cvtColor(bgr, hsv, cv::COLOR_BGR2HSV);
 
     // OpenCV HSV: H 0-180, S 0-255, V 0-255
-    // Skin hue: 0-25 and 165-180 (wraps), S 20-170, V 50-255
+    // Extended skin hue: 0-30 and 160-180 (wraps), S 15-220, V 40-255
+    // Covers light, olive, and darker South-Asian / African skin tones
     cv::Mat mask1, mask2, skinMask;
-    cv::inRange(hsv, cv::Scalar(0,   20,  50), cv::Scalar(25,  170, 255), mask1);
-    cv::inRange(hsv, cv::Scalar(165, 20,  50), cv::Scalar(180, 170, 255), mask2);
+    cv::inRange(hsv, cv::Scalar(0,   15,  40), cv::Scalar(30,  220, 255), mask1);
+    cv::inRange(hsv, cv::Scalar(160, 15,  40), cv::Scalar(180, 220, 255), mask2);
     cv::bitwise_or(mask1, mask2, skinMask);
 
     double skinRatio = (double)cv::countNonZero(skinMask) / (double)skinMask.total();
-    // At least 15 % of crop should be skin-coloured
-    return std::clamp((float)(skinRatio / 0.15), 0.0f, 1.0f);
+    // At least 10 % of crop should be skin-coloured (was 15 %, too strict for finger crops)
+    return std::clamp((float)(skinRatio / 0.10), 0.0f, 1.0f);
 }
 
-LivenessResult LivenessDetector::detect(const cv::Mat& image) {
+LivenessResult LivenessDetector::detect(const cv::Mat& image, float handConfidence) {
     LivenessResult result{};
 
     cv::Mat gray, bgr;
@@ -78,13 +80,15 @@ LivenessResult LivenessDetector::detect(const cv::Mat& image) {
     // Layer 4: skin colour
     result.skinScore = computeSkinScore(bgr);
 
-    // Combine scores (mediapipe base = 0.9 assumed present)
-    float confidence = 0.9f;
-    if (result.textureScore < 0.5f) confidence *= 0.6f;
-    if (result.skinScore    < 0.5f) confidence *= 0.7f;
+    // Combine scores — start from the actual MediaPipe hand detection confidence
+    // (mirrors reference: check_liveness(gray, bgr, hand_confidence) in server.py)
+    // Penalty thresholds at 0.4; isLive threshold at 0.50
+    float confidence = std::clamp(handConfidence, 0.0f, 1.0f);
+    if (result.textureScore < 0.4f) confidence *= 0.65f;
+    if (result.skinScore    < 0.4f) confidence *= 0.75f;
 
     result.confidence = std::clamp(confidence, 0.0f, 1.0f);
-    result.isLive     = result.confidence >= 0.6f;
+    result.isLive     = result.confidence >= 0.50f;
     return result;
 }
 

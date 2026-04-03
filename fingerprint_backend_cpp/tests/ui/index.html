@@ -1,0 +1,1065 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Fingerprint SDK — Test UI</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg:      #0d1117;
+  --surface: #161b22;
+  --border:  #30363d;
+  --accent:  #2ecc71;
+  --yellow:  #f1c40f;
+  --red:     #e74c3c;
+  --text:    #c9d1d9;
+  --muted:   #8b949e;
+  --radius:  8px;
+}
+
+html, body { height: 100%; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Segoe UI', system-ui, sans-serif;
+  font-size: 14px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* ── Header ─────────────────────────────────────────────────────────── */
+header {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  padding: 10px 20px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+  z-index: 10;
+}
+.logo { font-size: 16px; font-weight: 700; letter-spacing: -.5px; }
+.logo span { color: var(--accent); }
+.badge {
+  font-size: 11px; background: #1e3a2e; color: var(--accent);
+  padding: 2px 8px; border-radius: 20px; border: 1px solid #2ecc7155;
+}
+#bin-status {
+  margin-left: auto; font-size: 11px; padding: 3px 10px;
+  border-radius: 20px; font-weight: 600;
+}
+#bin-status.ok     { background:#0d2818; color:#2ecc71; border:1px solid #2ecc7144; }
+#bin-status.python { background:#2b1f00; color:#f1c40f; border:1px solid #f1c40f44; }
+
+/* ── Tabs ────────────────────────────────────────────────────────────── */
+.tabs {
+  display: flex;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  padding: 0 20px;
+  flex-shrink: 0;
+}
+.tab-btn {
+  padding: 10px 18px; cursor: pointer; background: none; border: none;
+  color: var(--muted); font-size: 13px; font-weight: 500;
+  border-bottom: 2px solid transparent;
+  transition: color .15s, border-color .15s;
+}
+.tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+.tab-panel { display: none; flex: 1; overflow: hidden; }
+.tab-panel.active { display: flex; }
+
+/* ── Main layout ─────────────────────────────────────────────────────── */
+#tab-capture {
+  flex-direction: row;
+  height: calc(100vh - 81px);
+}
+
+/* ── Camera panel ───────────────────────────────────────────────────── */
+.cam-panel {
+  width: 440px;
+  min-width: 440px;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  overflow: hidden;
+}
+
+.cam-video-wrap {
+  position: relative;
+  background: #000;
+  flex-shrink: 0;
+  aspect-ratio: 4/3;
+  overflow: hidden;
+}
+#cam-video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+#cam-canvas { display: none; }
+
+/* Scan guide corners */
+.scan-guide {
+  position: absolute;
+  inset: 16px;
+  pointer-events: none;
+  transition: all .3s;
+}
+.scan-guide::before,
+.scan-guide::after,
+.scan-corner-br,
+.scan-corner-bl {
+  content: '';
+  position: absolute;
+  width: 22px; height: 22px;
+  border-color: var(--guide-color, var(--accent));
+  border-style: solid;
+  border-width: 0;
+  transition: border-color .3s;
+}
+/* top-left */
+.scan-guide::before  { top:0; left:0; border-top-width:3px; border-left-width:3px; border-radius:3px 0 0 0; }
+/* top-right */
+.scan-guide::after   { top:0; right:0; border-top-width:3px; border-right-width:3px; border-radius:0 3px 0 0; }
+/* bottom-right */
+.scan-corner-br      { bottom:0; right:0; border-bottom-width:3px; border-right-width:3px; border-radius:0 0 3px 0; }
+/* bottom-left */
+.scan-corner-bl      { bottom:0; left:0; border-bottom-width:3px; border-left-width:3px; border-radius:0 0 0 3px; }
+
+.scan-guide.ok  { --guide-color: #2ecc71; }
+.scan-guide.warn { --guide-color: #f1c40f; }
+.scan-guide.err  { --guide-color: #e74c3c; }
+
+/* LIVE badge */
+.live-badge {
+  position: absolute; top: 10px; left: 10px;
+  display: none; align-items: center; gap: 5px;
+  background: rgba(0,0,0,.6); border-radius: 4px; padding: 3px 8px;
+  pointer-events: none;
+}
+.live-dot {
+  width: 7px; height: 7px; border-radius: 50%; background: var(--red);
+  animation: pulse 1.2s ease infinite;
+}
+@keyframes pulse {
+  0%   { box-shadow: 0 0 0 0   rgba(231,76,60,.7); }
+  70%  { box-shadow: 0 0 0 7px rgba(231,76,60,0);  }
+  100% { box-shadow: 0 0 0 0   rgba(231,76,60,0);  }
+}
+.live-label { font-size: 10px; font-weight: 700; letter-spacing: 1px; color: #fff; }
+
+/* Quality HUD top-right */
+.quality-hud {
+  position: absolute; top: 10px; right: 10px;
+  background: rgba(0,0,0,.65); border-radius: 6px; padding: 5px 10px;
+  text-align: center; pointer-events: none; display: none;
+}
+.hud-score { font-size: 20px; font-weight: 800; line-height: 1; }
+.hud-label { font-size: 9px; letter-spacing: 1px; color: var(--muted); margin-top: 2px; }
+
+/* Finger bbox overlays on video */
+#bbox-canvas {
+  position: absolute; inset: 0; pointer-events: none;
+  width: 100%; height: 100%;
+}
+
+/* Guidance bar */
+.guidance-bar {
+  position: absolute; bottom: 0; left: 0; right: 0;
+  background: rgba(0,0,0,.72); backdrop-filter: blur(4px);
+  padding: 7px 14px; text-align: center;
+  font-size: 12px; font-weight: 600; letter-spacing: .3px;
+  pointer-events: none; transition: color .3s;
+  min-height: 30px;
+}
+
+/* Camera controls */
+.cam-controls {
+  padding: 10px 12px;
+  display: flex; flex-direction: column; gap: 8px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.btn-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+
+button {
+  padding: 7px 14px; border-radius: 6px; border: none; cursor: pointer;
+  font-size: 12px; font-weight: 600;
+  transition: opacity .15s, transform .1s;
+}
+button:active { transform: scale(.97); }
+button:disabled { opacity: .35; cursor: not-allowed; }
+.btn-primary   { background: var(--accent); color: #0d1117; }
+.btn-secondary { background: #21262d; color: var(--text); border: 1px solid var(--border); }
+.btn-danger    { background: #3d0f0f; color: #e74c3c; border: 1px solid #e74c3c44; }
+
+select {
+  background: #21262d; color: var(--text); border: 1px solid var(--border);
+  border-radius: 6px; padding: 6px 10px; font-size: 12px; cursor: pointer;
+}
+
+.stats { font-size: 11px; color: var(--muted); display: flex; gap: 14px; }
+.stats b { color: var(--text); }
+
+/* File drop zone */
+.cam-upload { padding: 10px 12px; }
+.drop-zone {
+  border: 1px dashed var(--border); border-radius: var(--radius);
+  padding: 12px; text-align: center; cursor: pointer;
+  transition: border-color .2s; position: relative; font-size: 12px;
+  color: var(--muted);
+}
+.drop-zone:hover { border-color: var(--accent); }
+.drop-zone input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+.drop-zone strong { color: var(--accent); }
+
+/* ── Right panel ────────────────────────────────────────────────────── */
+.right-panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* Finger grid */
+.finger-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  padding: 12px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+/* Finger tile */
+.finger-tile {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  position: relative;
+  transition: border-color .3s;
+  min-height: 180px;
+}
+.finger-tile.detected  { border-color: #2ecc7155; }
+.finger-tile.captured  { border-color: var(--accent); background: #0d2818; }
+.finger-tile.poor      { border-color: #e74c3c55; }
+
+.tile-header {
+  display: flex; align-items: center; justify-content: space-between;
+}
+.finger-name {
+  font-size: 11px; font-weight: 700; letter-spacing: 1px;
+  text-transform: uppercase; color: var(--muted);
+}
+.liveness-pill {
+  font-size: 10px; font-weight: 700; padding: 2px 7px;
+  border-radius: 20px;
+}
+.liveness-pill.live  { background: #0d2818; color: #2ecc71; }
+.liveness-pill.fake  { background: #3d0f0f; color: #e74c3c; }
+.liveness-pill.none  { background: #21262d; color: var(--muted); }
+
+.tile-body { display: flex; gap: 10px; align-items: flex-start; }
+
+.thumb-wrap {
+  width: 60px; height: 70px; flex-shrink: 0;
+  background: #0d1117; border-radius: 4px; overflow: hidden;
+  border: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: center;
+}
+.thumb-wrap img { width: 100%; height: 100%; object-fit: cover; display: none; }
+.thumb-wrap .thumb-icon { font-size: 22px; color: var(--muted); }
+
+.tile-scores { flex: 1; }
+
+.big-score {
+  font-size: 28px; font-weight: 800; line-height: 1;
+  font-variant-numeric: tabular-nums;
+  transition: color .3s;
+}
+.big-score.good { color: var(--accent); }
+.big-score.warn { color: var(--yellow); }
+.big-score.bad  { color: var(--red); }
+.big-score.none { color: var(--muted); }
+
+.score-bar-wrap {
+  height: 4px; background: var(--border); border-radius: 99px;
+  overflow: hidden; margin: 5px 0 8px;
+}
+.score-bar-fill {
+  height: 100%; border-radius: 99px;
+  transition: width .4s ease, background .4s ease;
+}
+
+.metric-chips { display: flex; gap: 5px; flex-wrap: wrap; }
+.chip {
+  font-size: 10px; padding: 2px 6px; border-radius: 4px;
+  background: #21262d; color: var(--muted); border: 1px solid var(--border);
+  font-variant-numeric: tabular-nums;
+}
+.chip b { color: var(--text); }
+
+/* Captured overlay */
+.captured-overlay {
+  position: absolute; inset: 0;
+  background: rgba(13,40,24,.75);
+  border-radius: var(--radius);
+  display: none; align-items: center; justify-content: center;
+  flex-direction: column; gap: 4px;
+}
+.captured-overlay.show { display: flex; }
+.captured-check { font-size: 32px; }
+.captured-label { font-size: 11px; font-weight: 700; color: var(--accent); letter-spacing: 1px; }
+
+/* Success banner */
+.success-banner {
+  background: #0d2818; border: 1px solid var(--accent);
+  border-radius: var(--radius); margin: 0 12px 10px;
+  padding: 12px 16px; text-align: center;
+  display: none;
+}
+.success-banner.show { display: block; }
+.success-banner h3 { color: var(--accent); font-size: 14px; margin-bottom: 4px; }
+.success-banner p  { color: var(--muted); font-size: 12px; }
+
+/* Footer row */
+.right-footer {
+  padding: 8px 12px;
+  border-top: 1px solid var(--border);
+  display: flex; gap: 8px; align-items: center;
+  flex-shrink: 0;
+}
+.progress-label { font-size: 12px; color: var(--muted); }
+.progress-label b { color: var(--text); }
+
+/* ── Match tab ───────────────────────────────────────────────────────── */
+#tab-match {
+  flex-direction: column;
+  padding: 20px;
+  overflow-y: auto;
+  gap: 16px;
+}
+.match-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 14px;
+}
+.card-title {
+  font-size: 10px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 1px; color: var(--muted); margin-bottom: 10px;
+}
+.drop-zone.match-drop { padding: 20px 10px; }
+.preview-img { width: 100%; border-radius: 6px; margin-top: 10px; display: none; }
+
+/* Spinners */
+.spinner {
+  width: 14px; height: 14px; border: 2px solid #ffffff33; border-top-color: #fff;
+  border-radius: 50%; animation: spin .6s linear infinite;
+  display: inline-block; vertical-align: middle; margin-right: 4px;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* Score rows (match) */
+.m-score-row {
+  display: flex; align-items: center; gap: 8px; margin-bottom: 6px;
+}
+.m-score-label { width: 80px; font-size: 12px; color: var(--muted); flex-shrink: 0; }
+.m-bar-wrap    { flex: 1; height: 5px; background: var(--border); border-radius: 99px; overflow: hidden; }
+.m-bar-fill    { height: 100%; border-radius: 99px; }
+.m-val         { width: 40px; text-align: right; font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; }
+
+.pill {
+  display: inline-block; padding: 2px 8px; border-radius: 20px;
+  font-size: 11px; font-weight: 600;
+}
+.pill.yes  { background:#0d2818; color:#2ecc71; }
+.pill.no   { background:#3d0f0f; color:#e74c3c; }
+.pill.warn { background:#2b1f00; color:#f1c40f; }
+
+.error-box {
+  background: #3d0f0f; border: 1px solid #e74c3c55; border-radius: 6px;
+  padding: 12px; color: #e74c3c; font-size: 12px;
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">Finger<span>print</span> SDK</div>
+  <div class="badge">C++ Core</div>
+  <div id="bin-status" class="python">checking…</div>
+</header>
+
+<div class="tabs">
+  <button class="tab-btn active" onclick="switchTab('capture')">Capture</button>
+  <button class="tab-btn"       onclick="switchTab('match')">Match</button>
+</div>
+
+<!-- ═══ TAB: Capture ══════════════════════════════════════════════════ -->
+<div id="tab-capture" class="tab-panel active">
+
+  <!-- Left: Camera -->
+  <div class="cam-panel">
+    <div class="cam-video-wrap">
+      <video id="cam-video" autoplay playsinline muted></video>
+      <canvas id="cam-canvas"></canvas>
+
+      <!-- Bounding box canvas (drawn by JS) -->
+      <canvas id="bbox-canvas"></canvas>
+
+      <!-- Scan guide corners -->
+      <div class="scan-guide err" id="scan-guide">
+        <div class="scan-corner-br"></div>
+        <div class="scan-corner-bl"></div>
+      </div>
+
+      <!-- LIVE badge -->
+      <div class="live-badge" id="live-badge">
+        <div class="live-dot"></div>
+        <div class="live-label">LIVE</div>
+      </div>
+
+      <!-- Quality HUD -->
+      <div class="quality-hud" id="quality-hud">
+        <div class="hud-score" id="hud-score">—</div>
+        <div class="hud-label">AVG QUALITY</div>
+      </div>
+
+      <!-- Guidance bar -->
+      <div class="guidance-bar" id="guidance-bar">Start the camera to begin</div>
+    </div>
+
+    <!-- Controls -->
+    <div class="cam-controls">
+      <div class="btn-row">
+        <button class="btn-primary"   id="btn-start" onclick="startCamera()">Start Camera</button>
+        <button class="btn-danger"    id="btn-stop"  onclick="stopCamera()" style="display:none">Stop</button>
+        <select id="hand-select" onchange="onHandChange()">
+          <option value="RIGHT">Right Hand</option>
+          <option value="LEFT">Left Hand</option>
+        </select>
+        <button class="btn-secondary" id="btn-reset" onclick="resetCaptures()" style="display:none" title="Clear all captured fingers">Reset</button>
+      </div>
+      <div class="stats" id="stats" style="display:none">
+        <span>Frames: <b id="stat-frames">0</b></span>
+        <span>Ping: <b id="stat-ms">—</b> ms</span>
+        <span>Hands: <b id="stat-hands">0</b></span>
+      </div>
+    </div>
+
+    <!-- File upload -->
+    <div class="cam-upload">
+      <div class="drop-zone"
+           ondragover="ev(event,true)" ondragleave="ev(event,false)" ondrop="onDrop(event)">
+        <input type="file" id="file-input" accept="image/*" onchange="onFileChange(event)" />
+        Drop or <strong>click</strong> to upload a finger image &nbsp;·&nbsp; JPG / PNG
+      </div>
+    </div>
+  </div><!-- /cam-panel -->
+
+  <!-- Right: Finger tiles -->
+  <div class="right-panel">
+
+    <!-- Success banner -->
+    <div class="success-banner" id="success-banner">
+      <h3>All 4 Fingers Captured</h3>
+      <p>Fingerprints ready for enrollment or verification.</p>
+    </div>
+
+    <!-- 2×2 finger grid -->
+    <div class="finger-grid">
+      <!-- tiles rendered by buildTiles() -->
+    </div>
+
+    <div class="right-footer">
+      <div class="progress-label" id="progress-label">0 / 4 fingers captured</div>
+    </div>
+  </div>
+
+</div><!-- /tab-capture -->
+
+
+<!-- ═══ TAB: Match ════════════════════════════════════════════════════ -->
+<div id="tab-match" class="tab-panel">
+  <div class="match-grid">
+    <div class="card">
+      <div class="card-title">Finger Image 1</div>
+      <div class="drop-zone match-drop" onclick="document.getElementById('mf1').click()">
+        <input type="file" id="mf1" accept="image/*" style="display:none" onchange="onMatchFile(1,event)" />
+        Click to upload
+      </div>
+      <img class="preview-img" id="mi1" />
+    </div>
+    <div class="card">
+      <div class="card-title">Finger Image 2</div>
+      <div class="drop-zone match-drop" onclick="document.getElementById('mf2').click()">
+        <input type="file" id="mf2" accept="image/*" style="display:none" onchange="onMatchFile(2,event)" />
+        Click to upload
+      </div>
+      <img class="preview-img" id="mi2" />
+    </div>
+  </div>
+
+  <div style="text-align:center">
+    <button class="btn-primary" id="btn-match" onclick="runMatch()" disabled
+            style="padding:10px 32px;font-size:14px">Compare Templates</button>
+  </div>
+
+  <div class="card" id="match-result-card" style="display:none"></div>
+</div>
+
+
+<script>
+// ═══════════════════════════════════════════════════════════════════════
+// Constants
+// ═══════════════════════════════════════════════════════════════════════
+const FINGER_NAMES  = ['INDEX', 'MIDDLE', 'RING', 'LITTLE'];
+const POLL_MS       = 300;
+const HOLD_FRAMES   = 3;   // consecutive good frames to auto-capture
+const CAPTURE_MIN_Q = 60;  // quality threshold for auto-capture
+
+// ═══════════════════════════════════════════════════════════════════════
+// State
+// ═══════════════════════════════════════════════════════════════════════
+let camStream    = null;
+let pollTimer    = null;
+let analyzing    = false;
+let frameCount   = 0;
+let handSide     = 'RIGHT';
+let holdCount    = {};   // { finger_id: consecutive_good_frames }
+let captured     = {};   // { finger_id: {thumb_b64, quality_score} }
+let lastFingers  = [];   // most recent server response
+
+FINGER_NAMES.forEach(n => {
+  holdCount[`RIGHT_${n}`] = 0;
+  holdCount[`LEFT_${n}`]  = 0;
+  captured[`RIGHT_${n}`]  = null;
+  captured[`LEFT_${n}`]   = null;
+});
+
+// ═══════════════════════════════════════════════════════════════════════
+// Init
+// ═══════════════════════════════════════════════════════════════════════
+function init() {
+  buildTiles();
+  checkBinary();
+}
+
+function buildTiles() {
+  const grid = document.querySelector('.finger-grid');
+  grid.innerHTML = '';
+  FINGER_NAMES.forEach(name => {
+    const fid = `${handSide}_${name}`;
+    grid.insertAdjacentHTML('beforeend', `
+      <div class="finger-tile" id="tile-${fid}">
+        <div class="tile-header">
+          <div class="finger-name">${name}</div>
+          <div class="liveness-pill none" id="lpill-${fid}">—</div>
+        </div>
+        <div class="tile-body">
+          <div class="thumb-wrap">
+            <img id="thumb-${fid}" alt="" />
+            <div class="thumb-icon" id="icon-${fid}">☁</div>
+          </div>
+          <div class="tile-scores">
+            <div class="big-score none" id="score-${fid}">—</div>
+            <div class="score-bar-wrap">
+              <div class="score-bar-fill" id="bar-${fid}" style="width:0%"></div>
+            </div>
+            <div class="metric-chips" id="chips-${fid}">
+              <div class="chip">Blur <b>—</b></div>
+              <div class="chip">Contrast <b>—</b></div>
+              <div class="chip">Ridge <b>—</b></div>
+            </div>
+          </div>
+        </div>
+        <div class="captured-overlay" id="cap-overlay-${fid}">
+          <div class="captured-check">✓</div>
+          <div class="captured-label">CAPTURED</div>
+        </div>
+      </div>
+    `);
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// Helpers
+// ═══════════════════════════════════════════════════════════════════════
+function scoreClass(q) {
+  if (q >= 70) return 'good';
+  if (q >= 40) return 'warn';
+  return 'bad';
+}
+function scoreColor(q) {
+  if (q >= 70) return '#2ecc71';
+  if (q >= 40) return '#f1c40f';
+  return '#e74c3c';
+}
+
+async function checkBinary() {
+  try {
+    const d = await (await fetch('/status')).json();
+    const el = document.getElementById('bin-status');
+    if (d.binaryFound) { el.className = 'ok';     el.textContent = '✓ C++ binary'; }
+    else               { el.className = 'python'; el.textContent = '⚡ Python/cv2'; }
+  } catch {}
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// Tabs
+// ═══════════════════════════════════════════════════════════════════════
+function switchTab(name) {
+  document.querySelectorAll('.tab-btn').forEach((b, i) => {
+    const names = ['capture', 'match'];
+    b.classList.toggle('active', names[i] === name);
+  });
+  document.querySelectorAll('.tab-panel').forEach(p =>
+    p.classList.toggle('active', p.id === 'tab-' + name));
+  if (name !== 'capture') stopPolling();
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// Camera
+// ═══════════════════════════════════════════════════════════════════════
+async function startCamera() {
+  try {
+    camStream = await navigator.mediaDevices.getUserMedia({
+      video: {
+        width:  { ideal: 1920 },
+        height: { ideal: 1080 },
+        facingMode: 'environment',
+        advanced: [{ focusMode: 'continuous' }, { exposureMode: 'continuous' }, { whiteBalanceMode: 'continuous' }]
+      }
+    });
+  } catch {
+    try {
+      camStream = await navigator.mediaDevices.getUserMedia({
+        video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: 'environment' }
+      });
+    } catch (e) {
+      alert('Camera error: ' + e.message); return;
+    }
+  }
+
+  const v = document.getElementById('cam-video');
+  v.srcObject = camStream;
+  await new Promise(r => { v.onloadedmetadata = r; });
+
+  document.getElementById('btn-start').style.display = 'none';
+  document.getElementById('btn-stop').style.display  = '';
+  document.getElementById('btn-reset').style.display = '';
+  document.getElementById('stats').style.display     = '';
+  document.getElementById('live-badge').style.display = 'flex';
+  document.getElementById('quality-hud').style.display = '';
+  setGuidance('Hand position: show your hand', 'warn');
+
+  startPolling();
+}
+
+function stopCamera() {
+  stopPolling();
+  if (camStream) { camStream.getTracks().forEach(t => t.stop()); camStream = null; }
+  document.getElementById('cam-video').srcObject = null;
+  document.getElementById('btn-start').style.display = '';
+  document.getElementById('btn-stop').style.display  = 'none';
+  document.getElementById('btn-reset').style.display = 'none';
+  document.getElementById('stats').style.display     = 'none';
+  document.getElementById('live-badge').style.display = 'none';
+  document.getElementById('quality-hud').style.display = 'none';
+  clearBboxCanvas();
+  setGuidance('Start the camera to begin', 'err');
+  document.getElementById('scan-guide').className = 'scan-guide err';
+}
+
+function onHandChange() {
+  handSide = document.getElementById('hand-select').value;
+  buildTiles();
+  resetCaptures();
+}
+
+function resetCaptures() {
+  FINGER_NAMES.forEach(n => {
+    const fid = `${handSide}_${n}`;
+    holdCount[fid] = 0;
+    captured[fid]  = null;
+  });
+  updateCaptureProgress();
+  document.getElementById('success-banner').classList.remove('show');
+  // re-render tiles
+  buildTiles();
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// Polling
+// ═══════════════════════════════════════════════════════════════════════
+function startPolling() {
+  if (pollTimer) return;
+  runAnalyze();
+  pollTimer = setInterval(runAnalyze, POLL_MS);
+}
+
+function stopPolling() {
+  if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+  analyzing = false;
+}
+
+async function runAnalyze() {
+  if (analyzing || !camStream) return;
+  const v = document.getElementById('cam-video');
+  if (v.readyState < 2) return;
+
+  analyzing = true;
+  const t0 = performance.now();
+
+  try {
+    const blob = await captureFrame();
+    const form = new FormData();
+    form.append('image', blob, 'frame.jpg');
+    form.append('hand', handSide);
+
+    const resp = await fetch('/analyze', { method: 'POST', body: form });
+    const data = await resp.json();
+
+    const ms = Math.round(performance.now() - t0);
+    frameCount++;
+    document.getElementById('stat-frames').textContent = frameCount;
+    document.getElementById('stat-ms').textContent     = ms;
+    document.getElementById('stat-hands').textContent  = data.hand_detected ? 1 : 0;
+
+    renderAnalysis(data);
+  } catch (e) {
+    console.warn('analyze error:', e);
+  } finally {
+    analyzing = false;
+  }
+}
+
+function captureFrame() {
+  return new Promise(resolve => {
+    const v = document.getElementById('cam-video');
+    const c = document.getElementById('cam-canvas');
+    c.width  = v.videoWidth;
+    c.height = v.videoHeight;
+    c.getContext('2d').drawImage(v, 0, 0);
+    c.toBlob(resolve, 'image/jpeg', 0.90);
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// Render server response
+// ═══════════════════════════════════════════════════════════════════════
+function renderAnalysis(data) {
+  lastFingers = data.fingers || [];
+
+  // Scan guide color
+  const guide = document.getElementById('scan-guide');
+  if (!data.hand_detected) {
+    guide.className = 'scan-guide err';
+  } else if (data.guidance) {
+    guide.className = 'scan-guide warn';
+  } else {
+    guide.className = 'scan-guide ok';
+  }
+
+  // Guidance bar
+  const guideText = data.guidance ||
+    (data.hand_detected ? (data.liveness_passed ? null : 'Keep your hand steady') : 'Place your hand flat in front of the camera');
+  setGuidance(
+    guideText || 'Good — hold steady',
+    !data.hand_detected ? 'err' : data.guidance ? 'warn' : 'ok'
+  );
+
+  // Quality HUD — avg quality of detected fingers
+  const detected = lastFingers.filter(f => f.detected);
+  if (detected.length > 0) {
+    const avg = detected.reduce((s, f) => s + f.quality_score, 0) / detected.length;
+    const hud = document.getElementById('hud-score');
+    hud.textContent  = avg.toFixed(0);
+    hud.style.color  = scoreColor(avg);
+  } else {
+    document.getElementById('hud-score').textContent = '—';
+    document.getElementById('hud-score').style.color = '#8b949e';
+  }
+
+  // Draw bboxes
+  drawBboxes(data.fingers);
+
+  // Update each finger tile
+  lastFingers.forEach(f => updateTile(f));
+}
+
+function setGuidance(text, state) {
+  const bar = document.getElementById('guidance-bar');
+  bar.textContent = text || '';
+  bar.style.color = state === 'ok' ? '#2ecc71' : state === 'warn' ? '#f1c40f' : '#e74c3c';
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// Tile update
+// ═══════════════════════════════════════════════════════════════════════
+function updateTile(f) {
+  const fid     = f.finger_id;
+  const tile    = document.getElementById('tile-' + fid);
+  const scoreEl = document.getElementById('score-' + fid);
+  const barEl   = document.getElementById('bar-' + fid);
+  const chipsEl = document.getElementById('chips-' + fid);
+  const lpill   = document.getElementById('lpill-' + fid);
+  const thumbEl = document.getElementById('thumb-' + fid);
+  const iconEl  = document.getElementById('icon-' + fid);
+
+  if (!tile) return;
+
+  // Already captured — only update thumbnail if we have one, don't reset
+  if (captured[fid]) {
+    return;
+  }
+
+  if (!f.detected) {
+    tile.className   = 'finger-tile';
+    scoreEl.textContent = '—';
+    scoreEl.className   = 'big-score none';
+    barEl.style.width   = '0%';
+    lpill.textContent   = '—';
+    lpill.className     = 'liveness-pill none';
+    chipsEl.innerHTML   = '<div class="chip">Blur <b>—</b></div><div class="chip">Contrast <b>—</b></div><div class="chip">Ridge <b>—</b></div>';
+    thumbEl.style.display = 'none';
+    if (iconEl) iconEl.style.display = '';
+    holdCount[fid] = 0;
+    return;
+  }
+
+  const q   = f.quality_score;
+  const col = scoreColor(q);
+  const cls = scoreClass(q);
+
+  tile.className      = 'finger-tile detected' + (q < 40 ? ' poor' : '');
+  scoreEl.textContent = q.toFixed(0);
+  scoreEl.className   = 'big-score ' + cls;
+  barEl.style.width   = Math.min(100, q) + '%';
+  barEl.style.background = col;
+
+  // Primary 3 scores per finger
+  chipsEl.innerHTML = `
+    <div class="chip" title="Brightness + uniformity">💡 <b>${(f.illumination_score||0).toFixed(0)}</b></div>
+    <div class="chip" title="Sharpness">🔍 <b>${f.blur_score.toFixed(0)}</b></div>
+    <div class="chip" title="Crop framing + coverage">📐 <b>${(f.position_score||0).toFixed(0)}</b></div>
+  `;
+
+  // Liveness
+  lpill.textContent = f.liveness ? 'LIVE' : 'FAKE';
+  lpill.className   = 'liveness-pill ' + (f.liveness ? 'live' : 'fake');
+
+  // Thumbnail
+  if (f.thumb_b64) {
+    thumbEl.src = 'data:image/jpeg;base64,' + f.thumb_b64;
+    thumbEl.style.display = 'block';
+    if (iconEl) iconEl.style.display = 'none';
+  }
+
+  // Auto-capture logic
+  if (q >= CAPTURE_MIN_Q && f.liveness) {
+    holdCount[fid] = (holdCount[fid] || 0) + 1;
+    if (holdCount[fid] >= HOLD_FRAMES) {
+      captureFingerNow(fid, f);
+    }
+  } else {
+    holdCount[fid] = 0;
+  }
+}
+
+function captureFingerNow(fid, f) {
+  captured[fid] = { quality_score: f.quality_score, thumb_b64: f.thumb_b64 };
+
+  const tile = document.getElementById('tile-' + fid);
+  if (tile) tile.className = 'finger-tile captured';
+
+  const overlay = document.getElementById('cap-overlay-' + fid);
+  if (overlay) overlay.classList.add('show');
+
+  updateCaptureProgress();
+}
+
+function updateCaptureProgress() {
+  const fids  = FINGER_NAMES.map(n => `${handSide}_${n}`);
+  const count = fids.filter(fid => captured[fid]).length;
+  document.getElementById('progress-label').innerHTML =
+    `<b>${count}</b> / 4 fingers captured`;
+
+  if (count === 4) {
+    document.getElementById('success-banner').classList.add('show');
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// Bbox canvas
+// ═══════════════════════════════════════════════════════════════════════
+function drawBboxes(fingers) {
+  const video  = document.getElementById('cam-video');
+  const canvas = document.getElementById('bbox-canvas');
+  const wrap   = video.parentElement;
+  canvas.width  = wrap.offsetWidth;
+  canvas.height = wrap.offsetHeight;
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  if (!fingers) return;
+
+  const COLORS = { INDEX: '#6366f1', MIDDLE: '#2ecc71', RING: '#f1c40f', LITTLE: '#e74c3c' };
+
+  fingers.forEach(f => {
+    if (!f.detected || !f.bbox_pct) return;
+    const name = f.finger_id.split('_')[1];
+    const col  = COLORS[name] || '#fff';
+    const b    = f.bbox_pct;
+    const x    = b.x * canvas.width;
+    const y    = b.y * canvas.height;
+    const w    = b.w * canvas.width;
+    const h    = b.h * canvas.height;
+
+    ctx.strokeStyle = col;
+    ctx.lineWidth   = 2;
+    ctx.strokeRect(x, y, w, h);
+
+    // Label
+    ctx.fillStyle = col;
+    ctx.font      = 'bold 11px system-ui';
+    ctx.fillText(name, x + 4, y + 14);
+  });
+}
+
+function clearBboxCanvas() {
+  const c = document.getElementById('bbox-canvas');
+  if (c) c.getContext('2d').clearRect(0, 0, c.width, c.height);
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// File upload (static image)
+// ═══════════════════════════════════════════════════════════════════════
+function ev(e, over) {
+  e.preventDefault();
+  e.currentTarget.classList.toggle('drag-over', over);
+}
+function onDrop(e) {
+  e.preventDefault();
+  e.currentTarget.classList.remove('drag-over');
+  const f = e.dataTransfer.files[0];
+  if (f) sendFileForAnalysis(f);
+}
+function onFileChange(e) {
+  const f = e.target.files[0];
+  if (f) sendFileForAnalysis(f);
+}
+
+async function sendFileForAnalysis(file) {
+  stopPolling();
+  const form = new FormData();
+  form.append('image', file, 'upload.jpg');
+  form.append('hand', handSide);
+  try {
+    const resp = await fetch('/analyze', { method: 'POST', body: form });
+    const data = await resp.json();
+    renderAnalysis(data);
+  } catch(e) {
+    setGuidance('Error: ' + e.message, 'err');
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// Match tab
+// ═══════════════════════════════════════════════════════════════════════
+let matchFiles = { 1: null, 2: null };
+
+function onMatchFile(n, e) {
+  const f = e.target.files[0]; if (!f) return;
+  matchFiles[n] = f;
+  const img = document.getElementById('mi' + n);
+  img.src = URL.createObjectURL(f);
+  img.style.display = 'block';
+  document.getElementById('btn-match').disabled = !(matchFiles[1] && matchFiles[2]);
+}
+
+function mBar(label, val, max=100) {
+  const pct = Math.min(100, val / max * 100);
+  const col = scoreColor(val);
+  const disp = val.toFixed(1);
+  return `<div class="m-score-row">
+    <div class="m-score-label">${label}</div>
+    <div class="m-bar-wrap"><div class="m-bar-fill" style="width:${pct}%;background:${col}"></div></div>
+    <div class="m-val" style="color:${col}">${disp}</div>
+  </div>`;
+}
+
+function renderMatchBlock(r, title) {
+  if (!r) return '';
+  return `
+    <div>
+      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-bottom:8px">${title}</div>
+      ${mBar('Quality', r.quality_score || 0)}
+      ${mBar('Blur',    r.blur_score    || 0)}
+      ${mBar('Contrast',r.contrast_score || 0)}
+      ${mBar('Ridge',   r.ridge_score   || 0)}
+      <div style="margin-top:6px;font-size:12px;color:var(--muted)">${r.guidance || ''}</div>
+    </div>
+  `;
+}
+
+async function runMatch() {
+  if (!matchFiles[1] || !matchFiles[2]) return;
+  const btn = document.getElementById('btn-match');
+  btn.innerHTML = '<span class="spinner"></span>Comparing…';
+  btn.disabled  = true;
+
+  const form = new FormData();
+  form.append('image1', matchFiles[1]);
+  form.append('image2', matchFiles[2]);
+
+  const card = document.getElementById('match-result-card');
+  try {
+    const data = await (await fetch('/match', { method: 'POST', body: form })).json();
+
+    if (data.errorMessage) {
+      card.innerHTML = `<div class="error-box">${data.errorMessage}</div>`;
+    } else {
+      const m   = data.match;
+      const col = m.isMatch ? '#2ecc71' : '#e74c3c';
+      const r1  = (data.image1 || {}).fingers?.[0] || data.image1;
+      const r2  = (data.image2 || {}).fingers?.[0] || data.image2;
+      card.innerHTML = `
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
+          ${renderMatchBlock(r1, 'Image 1')}
+          ${renderMatchBlock(r2, 'Image 2')}
+        </div>
+        <div style="text-align:center;padding:14px 0">
+          <div style="font-size:32px;font-weight:800;color:${col}">${m.isMatch ? '✓ MATCH' : '✗ NO MATCH'}</div>
+          <div style="font-size:13px;color:var(--muted);margin-top:6px">
+            Score: ${(m.score||0).toFixed(4)} &nbsp;·&nbsp; Threshold: 0.35
+          </div>
+          ${m._note ? `<div style="font-size:11px;color:var(--muted);margin-top:4px">⚠ ${m._note}</div>` : ''}
+        </div>
+      `;
+    }
+    card.style.display = '';
+  } catch(e) {
+    card.innerHTML = `<div class="error-box">Network error: ${e}</div>`;
+    card.style.display = '';
+  } finally {
+    btn.innerHTML = 'Compare Templates';
+    btn.disabled  = !(matchFiles[1] && matchFiles[2]);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+init();
+</script>
+</body>
+</html>

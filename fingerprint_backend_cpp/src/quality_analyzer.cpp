@@ -114,18 +114,66 @@ float QualityAnalyzer::computeOrientationScore(const cv::Mat& gray) {
     return std::clamp(coherence * 111.0f, 0.0f, 100.0f);
 }
 
-std::string QualityAnalyzer::generateGuidance(const QualityResult& r) {
-    // Priority: lighting > blur > coverage > ridges > orientation
-    if (r.contrastScore < 40.0f) {
-        return r.contrastScore < 25.0f
-            ? "Poor lighting - adjust brightness"
-            : "Adjust lighting for better contrast";
+float QualityAnalyzer::computeIlluminationScore(const cv::Mat& gray) {
+    // Brightness: ideal mean 100-180 (well-lit, not overexposed)
+    cv::Scalar meanVal = cv::mean(gray);
+    double brightness  = meanVal[0];
+    const double idealCenter = 140.0;
+    const double idealRange  = 80.0;   // soft falloff ±80 around 140
+    double brightScore = std::max(0.0, 1.0 - std::abs(brightness - idealCenter) / idealRange);
+
+    // Uniformity: quadrant brightness variance — uneven lighting = low score
+    int H = gray.rows, W = gray.cols;
+    double q[4] = {
+        cv::mean(gray(cv::Rect(0,   0,   W/2,   H/2  )))[0],
+        cv::mean(gray(cv::Rect(W/2, 0,   W-W/2, H/2  )))[0],
+        cv::mean(gray(cv::Rect(0,   H/2, W/2,   H-H/2)))[0],
+        cv::mean(gray(cv::Rect(W/2, H/2, W-W/2, H-H/2)))[0],
+    };
+    double qMean = (q[0]+q[1]+q[2]+q[3]) / 4.0;
+    double qVar  = 0.0;
+    for (int i = 0; i < 4; i++) qVar += (q[i]-qMean)*(q[i]-qMean);
+    qVar /= 4.0;
+    // std dev > 60 grey levels across quadrants = badly uneven
+    double uniformity = std::max(0.0, 1.0 - std::sqrt(qVar) / 60.0);
+
+    return std::clamp((float)((0.6 * brightScore + 0.4 * uniformity) * 100.0), 0.0f, 100.0f);
+}
+
+float QualityAnalyzer::computePositionScore(const cv::Mat& gray) {
+    // Aspect ratio: a finger crop should be portrait, h/w ≈ 2.0–3.5
+    double aspectRatio = (double)gray.rows / (double)gray.cols;
+    double aspectScore;
+    if (aspectRatio >= 2.0 && aspectRatio <= 3.5) {
+        aspectScore = 1.0;
+    } else if (aspectRatio < 2.0) {
+        aspectScore = std::max(0.0, aspectRatio / 2.0);
+    } else {
+        aspectScore = std::max(0.0, 1.0 - (aspectRatio - 3.5) / 3.5);
     }
-    if (r.blurScore        < 40.0f) return "Hold still - image is blurry";
-    if (r.coverageScore    < 40.0f) return "Center your finger on the sensor";
-    if (r.ridgeClarityScore < 40.0f) return "Press finger more firmly";
-    if (r.orientationScore < 40.0f) return "Straighten your finger";
-    if (r.compositeScore   >= 70.0f) return "Good - capture ready";
+
+    // Foreground coverage: how much of the crop the finger occupies (ideal 40-80%)
+    cv::Mat binary;
+    cv::threshold(gray, binary, 0, 255, cv::THRESH_BINARY | cv::THRESH_OTSU);
+    double coverage = (double)cv::countNonZero(binary) / (double)binary.total();
+    // Score peaks at 60% coverage, falls off symmetrically
+    double coverageScore = std::max(0.0, 1.0 - std::abs(coverage - 0.60) / 0.40);
+
+    return std::clamp((float)((0.5 * aspectScore + 0.5 * coverageScore) * 100.0), 0.0f, 100.0f);
+}
+
+std::string QualityAnalyzer::generateGuidance(const QualityResult& r) {
+    // Priority: illumination > blur > position > ridges > orientation
+    if (r.illuminationScore < 40.0f) {
+        return r.illuminationScore < 20.0f
+            ? "Too dark or overexposed — improve lighting"
+            : "Uneven lighting — move to better light";
+    }
+    if (r.blurScore         < 40.0f) return "Hold still — image is blurry";
+    if (r.positionScore     < 40.0f) return "Center your finger and fill the frame";
+    if (r.ridgeClarityScore < 40.0f) return "Press finger more firmly on lens";
+    if (r.orientationScore  < 40.0f) return "Straighten your finger";
+    if (r.compositeScore    >= 70.0f) return "Good — capture ready";
     return "Adjust position slightly";
 }
 
@@ -146,6 +194,8 @@ QualityResult QualityAnalyzer::analyze(const cv::Mat& image) {
     r.ridgeClarityScore = computeRidgeClarityScore(gray);
     r.coverageScore     = computeCoverageScore(gray);
     r.orientationScore  = computeOrientationScore(gray);
+    r.illuminationScore = computeIlluminationScore(gray);
+    r.positionScore     = computePositionScore(gray);
 
     r.compositeScore =
         r.blurScore         * 0.25f +

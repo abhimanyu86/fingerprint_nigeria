@@ -13,17 +13,19 @@ std::vector<uint8_t> encodeImage(const cv::Mat& image, int quality) {
     return buf;
 }
 
-CaptureResult processFingerImage(const std::vector<uint8_t>& jpegBytes) {
+CaptureResult processFingerImage(const std::vector<uint8_t>& jpegBytes,
+                                 float handConfidence) {
     CaptureResult result{};
 
     cv::Mat image = decodeImage(jpegBytes);
     if (image.empty()) {
-        result.accepted = false;
+        result.accepted     = false;
+        result.errorMessage = "Failed to decode image — invalid or empty JPEG";
         return result;
     }
 
     result.quality  = QualityAnalyzer::analyze(image);
-    result.liveness = LivenessDetector::detect(image);
+    result.liveness = LivenessDetector::detect(image, handConfidence);
 
     // Only run expensive template extraction when quality + liveness pass
     bool qualityOk  = (result.quality.decision != QualityDecision::REJECT);
