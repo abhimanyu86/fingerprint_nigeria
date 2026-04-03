@@ -32,6 +32,7 @@ class FingerResult(BaseModel):
     orientation_score:   Optional[float] = None
     liveness_passed:     bool
     liveness_confidence: Optional[float]
+    is_ai_generated:     bool             = False
     template:            Optional[str]    # base64 ISO 19794-2, None if failed
     enhanced_image_b64:  Optional[str]   = None  # CLAHE-enhanced grayscale crop for UI display
     error_code:          Optional[str]
@@ -45,6 +46,7 @@ class FingerResult(BaseModel):
 class AnalyzeRequest(BaseModel):
     image_base64: str
     hand:         str   # "RIGHT" | "LEFT"
+    mode:         str = ""  # The exact dropdown value (e.g., "RIGHT_THUMB")
 
 
 class AnalyzeFingerResult(BaseModel):
@@ -55,6 +57,7 @@ class AnalyzeFingerResult(BaseModel):
     illum_score:  Optional[float]   # contrast_score
     liveness:     bool
     liveness_conf: Optional[float]
+    is_ai_generated: bool = False
     guidance:     Optional[str]
     bbox_pct:     Optional[BboxPct]
 
@@ -64,6 +67,24 @@ class AnalyzeResponse(BaseModel):
     hand:          str
     guidance:      Optional[str]
     fingers:       List[AnalyzeFingerResult]
+
+
+# ── Video analyze ─────────────────────────────────────────────────────────────
+
+class VideoFrameResult(BaseModel):
+    frame_number:  int
+    timestamp_sec: float
+    hand_detected: bool
+    fingers:       List[AnalyzeFingerResult]
+    guidance:      Optional[str]
+
+
+class VideoAnalyzeResponse(BaseModel):
+    total_frames:    int
+    frames_analyzed: int
+    best_frame:      Optional[VideoFrameResult]
+    all_frames:      List[VideoFrameResult]
+    summary:         str
 
 
 class CaptureResponse(BaseModel):

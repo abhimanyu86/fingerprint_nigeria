@@ -16,6 +16,7 @@ from typing import Optional, Tuple, Dict
 # ── Landmark indices ──────────────────────────────────────────────────────────
 # Each finger: [MCP base, PIP, DIP, TIP]
 _FINGER_LANDMARKS: Dict[str, list] = {
+    "THUMB":  [1, 2, 3, 4],
     "INDEX":  [5, 6, 7, 8],
     "MIDDLE": [9, 10, 11, 12],
     "RING":   [13, 14, 15, 16],
@@ -23,7 +24,7 @@ _FINGER_LANDMARKS: Dict[str, list] = {
 }
 
 # Bounding box padding in pixels
-_BBOX_PADDING = 45
+_BBOX_PADDING = 15
 
 
 # ── Result types ──────────────────────────────────────────────────────────────
@@ -48,6 +49,7 @@ class HandDetectionResult:
     hand_side:   Optional[str] = None           # "Right" | "Left"
     fingers:     Dict[str, FingerCrop] = field(default_factory=dict)
     guidance:    Optional[str] = None           # real-time guidance text
+    raw_landmarks: Optional[object] = None      # Raw MediaPipe NormalizedLandmarkList
 
 
 # ── Detector class ────────────────────────────────────────────────────────────
@@ -124,6 +126,7 @@ class HandDetector:
         return HandDetectionResult(
             detected=True, confidence=0.88,
             finger_crop=crop, bbox=bbox,
+            raw_landmarks=lm,
         )
 
     def detect_all_fingers(self, frame: np.ndarray) -> HandDetectionResult:
@@ -175,6 +178,7 @@ class HandDetector:
                 hand_side=hand_side,
                 fingers=fingers,
                 guidance=geometry_guidance,
+                raw_landmarks=lm,
             )
 
         # ── Per-finger extension + crop ───────────────────────────────────────
@@ -187,7 +191,7 @@ class HandDetector:
         # ── Finger-level guidance ─────────────────────────────────────────────
         missing = [n.capitalize() for n, f in fingers.items() if not f.detected]
         if detected_count == 0:
-            guidance = "Raise all 4 fingers and point them toward the camera"
+            guidance = "Raise your fingers and point them toward the camera"
         elif missing:
             guidance = "Raise your " + ", ".join(missing) + " finger" + ("s" if len(missing) > 1 else "")
         elif not all_vertical:
@@ -204,6 +208,7 @@ class HandDetector:
             hand_side=hand_side,
             fingers=fingers,
             guidance=guidance,
+            raw_landmarks=lm,
         )
 
     def is_finger_vertical(self, frame: np.ndarray, tolerance: int = 35) -> bool:

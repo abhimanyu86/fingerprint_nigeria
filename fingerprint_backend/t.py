@@ -1,0 +1,1 @@
+uv run python -c "import base64,subprocess;f=open('ai_hand.jpg','rb');b64=base64.b64encode(f.read()).decode();f.close();subprocess.run(['clip'],input=b64.encode(),check=True);print('AI image copied to clipboard!')"
